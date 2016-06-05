@@ -1,9 +1,32 @@
-#Deeper Thought 2
+#Deeper Thought Net
+Deeper Thought Net is a fork of Deeper Thought 2 by David Eilering. It is currently a very very unpolished proof of concept.
+
+It will be used to integrate the PIDP-8 into my home automation system. It will probably mainly run in mode ***111***, but if need be
+it will display a scrolling message as long as it is not confirmed by on of the push switches.
+
+The fork adds a network server that accepts commands to controll the leds and the behavior of the programm and reports the switch state.
+
+After starting the program (see below) it will accept one network connection on port 8888. You can use telnet to connect.
+
+The moment you connect all leds will go blank, the function of the mode switches are disabled and the Current Address led will indicate that there is a connected client.
+
+The following commands are accepted:
+* ***mode*** reports the current mode
+* ***mode <mode>*** sets the mode to <mode>
+* ***mode saved*** sets the mode to the mode that was active directly before the client connected
+* ***mode switches*** sets the mode to the mode indicated by the mode switches
+* ***flasb <time>*** flashes all leds for <time> * 1/10 seconds on
+* ***text <the text to be displayed>* switches to the text scroller (mode ***100***) and displays the given text
+* ***quit*** close client connection
+* ***exit*** end programm
+
+If the state of any of the 6 push switches from START to STOP changes this will be reported back to the connected client.
+
+##The following original description still applies
+
 A program that blinks the LEDs on the [PiDP-8 kit](http://obsolescence.wix.com/obsolescence#!pidp-8/cbie) created by Oscar Vermeulen. This program is C++ and does not run in the PDP-8 simulator. The default mode is designed to be similar to Steve Gibson's Deep Thought program for the PDP-8.
 
 Deeper Thought 2 is a fork of [Deeper Thought by Norman Davie](https://groups.google.com/d/msg/pidp-8/tbciVNoZJbw/AMjywRKLAwAJ).  The file gpio.c and gpio.h were copied from Oscar Vermeulen's PDP-8/simH project.
-
-**[Deeper Thought 2 Demo Video on YouTube](https://youtu.be/0OudB99Cccc)**
 
 #####Added modes by changing the 3 far left brown switches (0=down / 1=up)
 * **111** = Normal mode with all LEDs flashing (Default / Undefined fallback)

@@ -69,7 +69,6 @@
  *
  * 	Misc Notes:
  *		Added console output that shows switch values when the switches change.
- * 		The blink delay is fixed to 1/2 second in Binary Clock mode.
  * 		This should not be run simultaneously with the pidp8 simulator
  * 	
  *	Installation
@@ -216,6 +215,7 @@ int start[]             = {0x02, 11,    01};
 // GETSWITCHES
 int swregister[]        = {0x00, 0,     07777};
 int step[]              = {0x01, 6,     077};
+int push[]              = {0x02, 6,     077};
 
 // STORE 
 // 1) clamps the maximum value via an and mask
@@ -263,6 +263,8 @@ int rand_flag( int max_rand, int max_true )
 	}
 }
 
+int client = 0; //fd of connected client
+
 void ClearAllLEDs()	// function added by Norman Davie - used by Pong mode
 {
 	STORE(programCounter,    0);
@@ -287,11 +289,39 @@ void ClearAllLEDs()	// function added by Norman Davie - used by Pong mode
 	STORE(executeLED,        0);
 	STORE(deferLED,          0);
 	STORE(wordCountLED,      0);
-	STORE(currentAddressLED, 0);
+	STORE(currentAddressLED, client?1:0);
 	STORE(breakLED,          0);
 	STORE(ionLED,            0);
 	STORE(pauseLED,          0);
 	STORE(runLED,            0);
+}
+
+void AllLEDsOn()
+{
+	STORE(programCounter,    65535 & programCounter[2]);
+	STORE(memoryAddress,     65535 & memoryAddress[2]);
+	STORE(memoryBuffer,      65535 & memoryBuffer[2]);
+	STORE(accumulator,       65535 & accumulator[2]);
+	STORE(multiplierQuotient,65535 & multiplierQuotient[2]);
+	STORE(stepCounter,       65535 & stepCounter[2]);
+	STORE(dataField,         65535 & dataField[2]);
+	STORE(instField,         65535 & instField[2]);
+	STORE(andLED, 1);
+	STORE(tadLED, 1);
+	STORE(iszLED, 1);
+	STORE(dcaLED, 1);
+	STORE(jmsLED, 1);
+	STORE(jmpLED, 1);
+	STORE(iotLED, 1);
+	STORE(oprLED, 1);
+	STORE(pauseLED, 1);
+	STORE(linkLED, 1);
+	STORE(deferLED, 1);
+	STORE(wordCountLED, 1);
+	STORE(currentAddressLED, 1);
+	STORE(breakLED, 1);
+	STORE(ionLED,     1);
+	STORE(fetchLED,   1);
 }
 
 void loadMsg(char *tmpMsg) {
@@ -421,23 +451,60 @@ int main( int argc, char *argv[] )
 
   // set the status LEDs
   STORE(ionLED,     1);
-  STORE(fetchLED,   1);
+  STORE(fetchLED,   0);
   STORE(executeLED, 1);
   STORE(runLED,     1);
   STORE(pauseLED,   0);
   STORE(jmpLED,     1);
 
+
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+  int server = socket (AF_INET, SOCK_STREAM, 0);
+
+  const int v = 1;
+  setsockopt( server, SOL_SOCKET, SO_REUSEADDR, &v, sizeof(v));
+
+printf( "server: %i\n", server );
+
+  struct sockaddr_in addr;
+  memset(&addr, 0, sizeof(addr));
+  addr.sin_family = AF_INET;
+  addr.sin_addr.s_addr = INADDR_ANY;
+  addr.sin_port = htons (8888);
+
+  if( bind( server, &addr, sizeof(addr) ) == 0 )
+    STORE(fetchLED,   1);
+
+  listen ( server, 1 );
+
+  fd_set read_fds;
+  FD_ZERO(&read_fds);
+  FD_SET(server, &read_fds);
+  
+  struct timeval timeout;
+  
+  int max = server;
   while(! terminate)
   {
     // blink the execute LED after every randomization
     //STORE(executeLED, ! GET(executeLED));
     STORE(executeLED, 1);
     
-		// Use DF switches to control mode
-		deeperThoughtMode = (GETSWITCHES(step) & 070)>>3;
-		
-		// Get IF switches value
-		swIfValue = (GETSWITCHES(step) & 07);
+    // Use DF switches to control mode
+    if( !client ) {
+      deeperThoughtMode = (GETSWITCHES(step) & 070)>>3;
+
+      // if one of the single step switches is selected, then "pause" and don't change the LED display
+      // otherwise "run"
+      dontChangeLEDs = GETSWITCH(singStep) || GETSWITCH(singInst);
+      STORE(pauseLED, dontChangeLEDs);
+      STORE(runLED, ! dontChangeLEDs);
+    }
+	
+    // Get IF switches value
+    swIfValue = (GETSWITCHES(step) & 07);
 
     // if we're paused -- don't change the LEDs
     if (! dontChangeLEDs)
@@ -485,36 +552,13 @@ int main( int argc, char *argv[] )
 			STORE(linkLED, 0);
 			STORE(deferLED, 0);
 			STORE(wordCountLED, 0);
-			STORE(currentAddressLED, 0);
+	                STORE(currentAddressLED, client?1:0);
 			STORE(breakLED, 0);
 			STORE(ionLED,     0);
 			STORE(fetchLED,   0);
 			break;
 		  case 0:	// 000 = ALL LEDS ON
-			STORE(programCounter,    65535 & programCounter[2]);
-			STORE(memoryAddress,     65535 & memoryAddress[2]);
-			STORE(memoryBuffer,      65535 & memoryBuffer[2]);
-			STORE(accumulator,       65535 & accumulator[2]);
-			STORE(multiplierQuotient,65535 & multiplierQuotient[2]);
-			STORE(stepCounter,       65535 & stepCounter[2]);
-			STORE(dataField,         65535 & dataField[2]);
-			STORE(instField,         65535 & instField[2]);
-			STORE(andLED, 1);
-			STORE(tadLED, 1);
-			STORE(iszLED, 1);
-			STORE(dcaLED, 1);
-			STORE(jmsLED, 1);
-			STORE(jmpLED, 1);
-			STORE(iotLED, 1);
-			STORE(oprLED, 1);
-			STORE(pauseLED, 1);
-			STORE(linkLED, 1);
-			STORE(deferLED, 1);
-			STORE(wordCountLED, 1);
-			STORE(currentAddressLED, 1);
-			STORE(breakLED, 1);
-			STORE(ionLED,     1);
-			STORE(fetchLED,   1);
+                        AllLEDsOn();
 			break;
 		  case 6:	// 110 = Binary Clock
 			currentTime = time(NULL);
@@ -536,7 +580,7 @@ int main( int argc, char *argv[] )
 			STORE(linkLED, 0);
 			STORE(deferLED, 0);
 			STORE(wordCountLED, 0);
-			STORE(currentAddressLED, 0);
+	                STORE(currentAddressLED, client?1:0);
 			STORE(breakLED, 0);
 			STORE(ionLED,     1);
 			STORE(fetchLED,   1);
@@ -566,7 +610,7 @@ int main( int argc, char *argv[] )
 			STORE(linkLED, 0);
 			STORE(deferLED, 0);
 			STORE(wordCountLED, 0);
-			STORE(currentAddressLED, 0);
+	                STORE(currentAddressLED, client?1:0);
 			STORE(breakLED, 0);
 			STORE(ionLED,     1);
 			STORE(fetchLED,   1);
@@ -644,7 +688,7 @@ int main( int argc, char *argv[] )
 			STORE(linkLED, 0);
 			STORE(deferLED, 0);
 			STORE(wordCountLED, 0);
-			STORE(currentAddressLED, 0);
+	                STORE(currentAddressLED, client?1:0);
 			STORE(breakLED, 0);
 			STORE(ionLED,     1);
 			STORE(fetchLED,   1);
@@ -741,7 +785,7 @@ int main( int argc, char *argv[] )
 			STORE(instField,   0);
 			STORE(linkLED,     0);
 
-			if (msgPos == 0 && charPos == 0) {
+			if (msgPos == 0 && charPos == 0  && (!client || !msg[0])) {
 				loadMsg(msg);
 				msgLen = strlen(msg);
 			}
@@ -823,7 +867,7 @@ int main( int argc, char *argv[] )
 			STORE(linkLED, rand_flag(100,20));
 			STORE(deferLED, 0);
 			STORE(wordCountLED, 0);
-			STORE(currentAddressLED, 0);
+	                STORE(currentAddressLED, client?1:0);
 			STORE(breakLED, 0);
 			STORE(ionLED,     1);
 			STORE(fetchLED,   1);
@@ -842,7 +886,7 @@ int main( int argc, char *argv[] )
     else
     {
 		sleepTime = 250 * 1000;
-	}
+    }
 
 	// Subtract the delay added below
 	if(sleepTime > opled_delay)
@@ -867,7 +911,7 @@ int main( int argc, char *argv[] )
 	}
 	
 	// Random Delay
-    usleep(sleepTime);
+    //usleep(sleepTime);
 
     // if the stop switch is held for > 3 seconds, then clean up nicely
     if (GETSWITCH(stop))
@@ -909,12 +953,147 @@ int main( int argc, char *argv[] )
 		startPressedTime = 0;
 	}
 	
-    // if one of the single step switches is selected, then "pause" and don't change the LED display
-    // otherwise "run"
-    dontChangeLEDs = GETSWITCH(singStep) || GETSWITCH(singInst);
-    STORE(pauseLED, dontChangeLEDs);
-    STORE(runLED, ! dontChangeLEDs);
-    
+
+      static int old_v = 077;
+      int v = GETSWITCHES(push);
+      if( client && v != old_v ) {
+        char buff[32] = "push: ......\n";
+        for( int i = 0; i < 6; ++i ) {
+          if( v & (1 << i) )
+            strncpy( (char *)&buff+11-i, ".", 1 );
+          else
+            strncpy( (char *)&buff+11-i, "X", 1 );
+        }
+
+        send( client, &buff, strlen(buff), 0 );
+
+       old_v = v;
+     }
+
+    timeout.tv_sec = 0;
+    timeout.tv_usec = sleepTime;
+    //memset(&timeout, 0, sizeof(timeout));
+    FD_ZERO(&read_fds);
+    FD_SET(server, &read_fds);
+    if( client )
+      FD_SET(client, &read_fds);
+    if( select(max+1, &read_fds, NULL, NULL, &timeout) ) {
+      static int saved_mode;
+      if( terminate ) {
+      } else if( FD_ISSET(server, &read_fds)) {
+        struct sockaddr addr;
+        socklen_t addrlen = sizeof(addr);
+        if( client ) {
+printf( "reject\n" );
+          close( accept( server, &addr, &addrlen ) );
+        } else {
+          AllLEDsOn();
+          usleep(50000);
+          ClearAllLEDs();
+	  STORE(currentAddressLED, 1);
+
+          saved_mode = deeperThoughtMode;
+          deeperThoughtMode = 10;
+          dontChangeLEDs = 1;
+
+          client = accept( server, &addr, &addrlen );
+          max = client>server?client:server;
+printf( "client: %i\n", client );
+        }
+
+      } else if( client && FD_ISSET(client, &read_fds)) {
+        char buff[1024];
+        ssize_t len = recv( client, &buff, sizeof(buff), 0 );
+        if( len ) {
+          buff[len-1] = 0;
+printf( "read: %i\n", len );
+printf( "      %s\n", buff );
+          if( len == 2 ) {
+            int v = GET(programCounter);
+            for( int i = 0; i < 12; ++i ) {
+              if( v & (1 << i) )
+                strncpy( (char *)&buff+11-i, "X", 1 );
+              else
+                strncpy( (char *)&buff+11-i, " ", 1 );
+            }
+            buff[12] = '\n';
+            buff[13] = 0;
+printf( "%i\n", v );
+            send( client, &buff, strlen(buff), 0 );
+
+          } else if( len >= 4 && strncmp(buff, "exit", 4 ) == 0 ) {
+            terminate = 1;
+
+          } else if( len >= 4 && strncmp(buff, "quit", 4 ) == 0 ) {
+            close( client );
+
+            client = 0;
+            max = server;
+
+	    STORE(currentAddressLED, 0);
+
+            deeperThoughtMode = saved_mode;
+            dontChangeLEDs = 0;
+
+          } else if( len >= 5 && strncmp(buff, "flash", 5 ) == 0 ) {
+            int time = atoi( buff+5 );
+            if( !time )
+              time = 5;
+
+            AllLEDsOn();
+            usleep(time * 10000);
+            ClearAllLEDs();
+
+	    STORE(currentAddressLED, 1);
+
+          } else if( len > 5 && strncmp(buff, "mode ", 5 ) == 0 ) {
+            if( len >= 13 && strncmp(buff, "mode switches", 13 ) == 0 )
+              deeperThoughtMode = (GETSWITCHES(step) & 070)>>3;
+            else if( len >= 10 && strncmp(buff, "mode saved", 10 ) == 0 )
+              deeperThoughtMode = saved_mode;
+            else
+              deeperThoughtMode = atoi( buff+5 );
+
+            dontChangeLEDs = deeperThoughtMode == 10;
+
+            if( dontChangeLEDs )
+              ClearAllLEDs();
+
+            sprintf( buff, "mode: %i\n", deeperThoughtMode );
+            send( client, &buff, strlen(buff), 0 );
+
+          } else if( len >= 4 && strncmp(buff, "mode", 4 ) == 0 ) {
+            sprintf( buff, "mode: %i\n", deeperThoughtMode );
+            send( client, &buff, strlen(buff), 0 );
+
+          } else if( len > 5 && strncmp(buff, "text ", 5 ) == 0 ) {
+            dontChangeLEDs = 0;
+            deeperThoughtMode = 4;
+            strncpy( msg, buff+5, len-5 );
+            msg[len-5] = 0;
+
+            msgPos = 0;
+            charPos = 0;
+            msgLen = strlen(msg);
+
+          } else {
+		STORE(programCounter,    65535 & atoi(buff));
+          }
+        } else {
+printf( "closed\n" );
+          close( client );
+
+          client = 0;
+          max = server;
+
+	  STORE(currentAddressLED, 0);
+
+          deeperThoughtMode = saved_mode;
+          dontChangeLEDs = 0;
+        }
+      }
+    }
+
     // Turn operation LEDs off for 10ms to create a fast blink
     STORE(executeLED, 0);
     STORE(andLED, 0);
@@ -926,8 +1105,12 @@ int main( int argc, char *argv[] )
     STORE(iotLED, 0);
     STORE(oprLED, 0);
     usleep(opled_delay);
- }
+  }
 
+  if( client )
+    close( client );
+  if( server )
+    close( server );
 
   if( pthread_join(thread1, NULL) )
     printf( "\r\nError joining multiplex thread\r\n" );
