@@ -368,11 +368,10 @@ int
 startServer()
 {
   int server = socket (AF_INET, SOCK_STREAM, 0);
+printf( "server: %i\n", server );
 
   const int v = 1;
   setsockopt( server, SOL_SOCKET, SO_REUSEADDR, &v, sizeof(v));
-
-printf( "server: %i\n", server );
 
   struct sockaddr_in addr;
   memset(&addr, 0, sizeof(addr));
@@ -399,23 +398,46 @@ bitsToString( char *buff, int len, int value, char *on, char *off )
   }
 }
 int
-stringToBits( char *buff, int len, int offset, char *on )
+stringToBits( char *buff, char *on )
 {
   int v = 0;
 
+  int len = strlen(buff);
   for( int i = 0; i < len; ++i ) {
     if( buff[i] == on[0] ) 
-      v |= (1<<len-1-1);
+      v |= (1<<len-1-i);
   }
 
   return v;
 }
 int
-startsWith( char *buff, int len, char* cmd )
+startsWith( char *buff, char *cmd )
 {
   int cmd_len = strlen( cmd );
-  if( len >= cmd_len && strncmp(buff, "mode", cmd_len ) == 0 )
+  if( strncmp(buff, cmd, cmd_len ) == 0 )
     return 1;
+
+  return 0;
+}
+int *
+nameToRegister( char *buff )
+{
+  if( startsWith( buff, "programCounter " ) )
+    return programCounter;
+  else if( startsWith( buff, "memoryAddress " ) )
+    return memoryAddress;
+  else if( startsWith( buff, "memoryBuffer " ) )
+    return memoryBuffer;
+  else if( startsWith( buff, "accumulator " ) )
+    return accumulator;
+  else if( startsWith( buff, "multiplierQuotient " ) )
+    return multiplierQuotient;
+  else if( startsWith( buff, "stepCounter " ) )
+    return stepCounter;
+  else if( startsWith( buff, "instField " ) )
+    return instField;
+  else if( startsWith( buff, "instField " ) )
+    return instField;
 
   return 0;
 }
@@ -519,6 +541,7 @@ int main( int argc, char *argv[] )
   STORE(jmpLED,     1);
 
 
+  // network stuff
   int server = startServer();
   int fd_max = server;
 
@@ -527,6 +550,7 @@ int main( int argc, char *argv[] )
   FD_SET(server, &read_fds);
   
   struct timeval timeout;
+  // end network stuff
   
 
   while(! terminate)
@@ -1059,10 +1083,10 @@ printf( "      %s\n", buff );
 printf( "%i\n", v );
             send( client, &buff, strlen(buff), 0 );
 
-          } else if( startsWith( buff, len, "exit" ) ) {
+          } else if( startsWith( buff, "exit" ) ) {
             terminate = 1;
 
-          } else if( startsWith( buff, len, "quit" ) ) {
+          } else if( startsWith( buff, "quit" ) ) {
             close( client );
 
             client = 0;
@@ -1073,7 +1097,7 @@ printf( "%i\n", v );
             deeperThoughtMode = saved_mode;
             dontChangeLEDs = 0;
 
-          } else if( startsWith( buff, len, "flash" ) ) {
+          } else if( startsWith( buff, "flash" ) ) {
             int time = atoi( buff+5 );
             if( !time )
               time = 5;
@@ -1084,7 +1108,7 @@ printf( "%i\n", v );
 
 	    STORE(currentAddressLED, 1);
 
-          } else if( startsWith( buff, len, "mode " ) ) {
+          } else if( startsWith( buff, "mode " ) ) {
             if( len >= 13 && strncmp(buff, "mode switches", 13 ) == 0 )
               deeperThoughtMode = (GETSWITCHES(step) & 070)>>3;
             else if( len >= 10 && strncmp(buff, "mode saved", 10 ) == 0 )
@@ -1100,11 +1124,48 @@ printf( "%i\n", v );
             sprintf( buff, "mode: %i\n", deeperThoughtMode );
             send( client, &buff, strlen(buff), 0 );
 
-          } else if( startsWith( buff, len, "mode" ) ) {
+          } else if( startsWith( buff, "mode" ) ) {
             sprintf( buff, "mode: %i\n", deeperThoughtMode );
             send( client, &buff, strlen(buff), 0 );
 
-          } else if( startsWith( buff, len, "text " ) ) {
+          } else if( startsWith( buff, "regClear " ) ) {
+            int *reg = nameToRegister( buff+9 );
+
+            if( reg ) {
+	      STORE(reg, 0);
+            } else
+              send( client, "unknown register\n", 17, 0 );
+
+          } else if( startsWith( buff, "regGet " ) ) {
+            int *reg = nameToRegister( buff+7 );
+
+            if( reg ) {
+              int v = GET(reg);
+
+              bitsToString( buff, 12, v, "X", " " );
+              buff[12] = '\n';
+              buff[13] = 0;
+
+              send( client, &buff, strlen(buff), 0 );
+
+            } else
+              send( client, "unknown register\n", 17, 0 );
+
+          } else if( startsWith( buff, "regSet " ) ) {
+            int *reg = nameToRegister( buff+7 );
+
+            if( reg ) {
+              char *pos = strchr(buff+7, ' ');
+              int v = 0;
+              if( pos )
+                v = atoi(pos);
+
+	      STORE(reg, 65535 & v);
+
+            } else
+              send( client, "unknown register\n", 17, 0 );
+
+          } else if( startsWith( buff, "text " ) ) {
             dontChangeLEDs = 0;
             deeperThoughtMode = 4;
             strncpy( msg, buff+5, len-5 );
@@ -1133,6 +1194,7 @@ printf( "closed\n" );
         }
       }
     }
+    // end handle sockets
 
 
     // Turn operation LEDs off for 10ms to create a fast blink
