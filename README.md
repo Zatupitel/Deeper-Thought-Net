@@ -15,7 +15,10 @@ The following commands are accepted:
 * ***mode &lt;mode&gt;***: sets the mode to &lt;mode&gt;
 * ***mode saved***: sets the mode to the mode that was active directly before the client connected
 * ***mode switches***: sets the mode to the mode indicated by the mode switches
-* ***flasb &lt;time&gt;***: flashes all leds for &lt;time&gt; * 1/10 seconds on
+* ***flash &lt;time&gt;***: flashes all leds for &lt;time&gt; * 1/10 seconds on
+* ***regClear &lt;name&gt;***: clear the named register
+* ***regGet &lt;name&gt;***: gets the named register
+* ***regSet &lt;name&gt; &lt;value&gt;***: sets the named register to &lt;value&gt;
 * ***text &lt;the text to be displayed&gt;***: switches to the text scroller (mode 100) and displays the given text
 * ***quit***: close client connection
 * ***exit***: end program

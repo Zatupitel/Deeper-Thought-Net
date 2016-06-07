@@ -388,13 +388,16 @@ printf( "server: %i\n", server );
 }
 
 void
-bitsToString( char *buff, int len, int value, char *on, char *off )
+bitsToString( char *buff, int len, int value, char on, char off )
 {
-  for( int i = 0; i < len; ++i ) {
+  int i;
+  for( i = 0; i < len; i++ ) {
     if( value & (1 << i) )
-      strncpy( (char *)&buff+len-1-i, on, 1 );
+      buff[len-1-i] = on;
+      //strncpy( (char *)&buff+len-1-i, on, 0 );
     else
-      strncpy( (char *)&buff+len-1-i, off, 1 );
+      buff[len-1-i] = off;
+      //strncpy( (char *)&buff+len-1-i, off, 0 );
   }
 }
 int
@@ -528,18 +531,6 @@ int main( int argc, char *argv[] )
       exit( EXIT_FAILURE );
     }
 
-  sleep( 2 );			// allow 2 sec for multiplex to start
-
-  srand(time(NULL));
-
-  // set the status LEDs
-  STORE(ionLED,     1);
-  STORE(fetchLED,   0);
-  STORE(executeLED, 1);
-  STORE(runLED,     1);
-  STORE(pauseLED,   0);
-  STORE(jmpLED,     1);
-
 
   // network stuff
   int server = startServer();
@@ -552,6 +543,18 @@ int main( int argc, char *argv[] )
   struct timeval timeout;
   // end network stuff
   
+
+  sleep( 2 );			// allow 2 sec for multiplex to start
+
+  srand(time(NULL));
+
+  // set the status LEDs
+  STORE(ionLED,     1);
+  STORE(fetchLED,   0);
+  STORE(executeLED, 1);
+  STORE(runLED,     1);
+  STORE(pauseLED,   0);
+  STORE(jmpLED,     1);
 
   while(! terminate)
   {
@@ -1025,7 +1028,7 @@ int main( int argc, char *argv[] )
       int v = GETSWITCHES(push);
       if( client && v != old_v ) {
         char buff[32] = "push: ......\n";
-        bitsToString( buff, 6, v, ".", "X" );
+        bitsToString( buff, 6, v, '.', 'X' );
 
         send( client, &buff, strlen(buff), 0 );
 
@@ -1077,7 +1080,7 @@ printf( "read: %i\n", len );
 printf( "      %s\n", buff );
           if( len == 2 ) {
             int v = GET(programCounter);
-            bitsToString( buff, 12, v, "X", " " );
+            bitsToString( buff, 12, v, 'X', ' ' );
             buff[12] = '\n';
             buff[13] = 0;
 printf( "%i\n", v );
@@ -1141,10 +1144,15 @@ printf( "%i\n", v );
 
             if( reg ) {
               int v = GET(reg);
+printf( "%i\n", v );
 
-              bitsToString( buff, 12, v, "X", " " );
-              buff[12] = '\n';
-              buff[13] = 0;
+              strcpy( buff, buff+7 );
+              char *pos = strchr(buff+7, ' ');
+              *(pos) = ':';
+              *(pos+1) = ' ';
+              bitsToString( pos+2, 12, v, 'o', '.' );
+              *(pos+14) = '\n';
+              *(pos+15) = 0;
 
               send( client, &buff, strlen(buff), 0 );
 
