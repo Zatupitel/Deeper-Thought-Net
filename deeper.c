@@ -2,6 +2,9 @@
  *****************************************************************************
  *
  * Purpose:
+ * DEEPER THOUGHT NET
+ *   adds a network sever to
+ * 
  * DEEPER THOUGHT
  *  - This program simulates the appearance of the famous program
  *    deep thought for the PDP-8, on the PiDP-8 kit created by
@@ -399,7 +402,11 @@ int
 stringToBits( char *buff, int len, int offset, char *on )
 {
   int v = 0;
-  //FIXME: todo
+
+  for( int i = 0; i < len; ++i ) {
+    if( buff[i] == on[0] ) 
+      v |= (1<<len-1-1);
+  }
 
   return v;
 }
