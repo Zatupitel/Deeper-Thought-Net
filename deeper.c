@@ -358,6 +358,60 @@ void loadMsg(char *tmpMsg) {
 	}
 }
 
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+int
+startServer()
+{
+  int server = socket (AF_INET, SOCK_STREAM, 0);
+
+  const int v = 1;
+  setsockopt( server, SOL_SOCKET, SO_REUSEADDR, &v, sizeof(v));
+
+printf( "server: %i\n", server );
+
+  struct sockaddr_in addr;
+  memset(&addr, 0, sizeof(addr));
+  addr.sin_family = AF_INET;
+  addr.sin_addr.s_addr = INADDR_ANY;
+  addr.sin_port = htons (8888);
+
+  if( bind( server, &addr, sizeof(addr) ) == 0 )
+    STORE(fetchLED,   1);
+
+  listen ( server, 1 );
+
+  return server;
+}
+
+void
+bitsToString( char *buff, int len, int value, char *on, char *off )
+{
+  for( int i = 0; i < len; ++i ) {
+    if( value & (1 << i) )
+      strncpy( (char *)&buff+len-1-i, on, 1 );
+    else
+      strncpy( (char *)&buff+len-1-i, off, 1 );
+  }
+}
+int
+stringToBits( char *buff, int len, int offset, char *on )
+{
+  int v = 0;
+  //FIXME: todo
+
+  return v;
+}
+int
+startsWith( char *buff, int len, char* cmd )
+{
+  int cmd_len = strlen( cmd );
+  if( len >= cmd_len && strncmp(buff, "mode", cmd_len ) == 0 )
+    return 1;
+
+  return 0;
+}
 
 int main( int argc, char *argv[] )
 {
@@ -458,26 +512,8 @@ int main( int argc, char *argv[] )
   STORE(jmpLED,     1);
 
 
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-  int server = socket (AF_INET, SOCK_STREAM, 0);
-
-  const int v = 1;
-  setsockopt( server, SOL_SOCKET, SO_REUSEADDR, &v, sizeof(v));
-
-printf( "server: %i\n", server );
-
-  struct sockaddr_in addr;
-  memset(&addr, 0, sizeof(addr));
-  addr.sin_family = AF_INET;
-  addr.sin_addr.s_addr = INADDR_ANY;
-  addr.sin_port = htons (8888);
-
-  if( bind( server, &addr, sizeof(addr) ) == 0 )
-    STORE(fetchLED,   1);
-
-  listen ( server, 1 );
+  int server = startServer();
+  int fd_max = server;
 
   fd_set read_fds;
   FD_ZERO(&read_fds);
@@ -485,7 +521,7 @@ printf( "server: %i\n", server );
   
   struct timeval timeout;
   
-  int max = server;
+
   while(! terminate)
   {
     // blink the execute LED after every randomization
@@ -958,34 +994,34 @@ printf( "server: %i\n", server );
       int v = GETSWITCHES(push);
       if( client && v != old_v ) {
         char buff[32] = "push: ......\n";
-        for( int i = 0; i < 6; ++i ) {
-          if( v & (1 << i) )
-            strncpy( (char *)&buff+11-i, ".", 1 );
-          else
-            strncpy( (char *)&buff+11-i, "X", 1 );
-        }
+        bitsToString( buff, 6, v, ".", "X" );
 
         send( client, &buff, strlen(buff), 0 );
 
        old_v = v;
      }
 
+
+    // handle sockets
     timeout.tv_sec = 0;
     timeout.tv_usec = sleepTime;
-    //memset(&timeout, 0, sizeof(timeout));
     FD_ZERO(&read_fds);
     FD_SET(server, &read_fds);
     if( client )
       FD_SET(client, &read_fds);
-    if( select(max+1, &read_fds, NULL, NULL, &timeout) ) {
+
+    if( select(fd_max+1, &read_fds, NULL, NULL, &timeout) ) {
       static int saved_mode;
       if( terminate ) {
+        // do nothing
+
       } else if( FD_ISSET(server, &read_fds)) {
         struct sockaddr addr;
         socklen_t addrlen = sizeof(addr);
         if( client ) {
 printf( "reject\n" );
           close( accept( server, &addr, &addrlen ) );
+
         } else {
           AllLEDsOn();
           usleep(50000);
@@ -997,7 +1033,7 @@ printf( "reject\n" );
           dontChangeLEDs = 1;
 
           client = accept( server, &addr, &addrlen );
-          max = client>server?client:server;
+          fd_max = client > server ? client : server;
 printf( "client: %i\n", client );
         }
 
@@ -1010,32 +1046,27 @@ printf( "read: %i\n", len );
 printf( "      %s\n", buff );
           if( len == 2 ) {
             int v = GET(programCounter);
-            for( int i = 0; i < 12; ++i ) {
-              if( v & (1 << i) )
-                strncpy( (char *)&buff+11-i, "X", 1 );
-              else
-                strncpy( (char *)&buff+11-i, " ", 1 );
-            }
+            bitsToString( buff, 12, v, "X", " " );
             buff[12] = '\n';
             buff[13] = 0;
 printf( "%i\n", v );
             send( client, &buff, strlen(buff), 0 );
 
-          } else if( len >= 4 && strncmp(buff, "exit", 4 ) == 0 ) {
+          } else if( startsWith( buff, len, "exit" ) ) {
             terminate = 1;
 
-          } else if( len >= 4 && strncmp(buff, "quit", 4 ) == 0 ) {
+          } else if( startsWith( buff, len, "quit" ) ) {
             close( client );
 
             client = 0;
-            max = server;
+            fd_max = server;
 
 	    STORE(currentAddressLED, 0);
 
             deeperThoughtMode = saved_mode;
             dontChangeLEDs = 0;
 
-          } else if( len >= 5 && strncmp(buff, "flash", 5 ) == 0 ) {
+          } else if( startsWith( buff, len, "flash" ) ) {
             int time = atoi( buff+5 );
             if( !time )
               time = 5;
@@ -1046,7 +1077,7 @@ printf( "%i\n", v );
 
 	    STORE(currentAddressLED, 1);
 
-          } else if( len > 5 && strncmp(buff, "mode ", 5 ) == 0 ) {
+          } else if( startsWith( buff, len, "mode " ) ) {
             if( len >= 13 && strncmp(buff, "mode switches", 13 ) == 0 )
               deeperThoughtMode = (GETSWITCHES(step) & 070)>>3;
             else if( len >= 10 && strncmp(buff, "mode saved", 10 ) == 0 )
@@ -1062,11 +1093,11 @@ printf( "%i\n", v );
             sprintf( buff, "mode: %i\n", deeperThoughtMode );
             send( client, &buff, strlen(buff), 0 );
 
-          } else if( len >= 4 && strncmp(buff, "mode", 4 ) == 0 ) {
+          } else if( startsWith( buff, len, "mode" ) ) {
             sprintf( buff, "mode: %i\n", deeperThoughtMode );
             send( client, &buff, strlen(buff), 0 );
 
-          } else if( len > 5 && strncmp(buff, "text ", 5 ) == 0 ) {
+          } else if( startsWith( buff, len, "text " ) ) {
             dontChangeLEDs = 0;
             deeperThoughtMode = 4;
             strncpy( msg, buff+5, len-5 );
@@ -1077,14 +1108,16 @@ printf( "%i\n", v );
             msgLen = strlen(msg);
 
           } else {
-		STORE(programCounter,    65535 & atoi(buff));
+            STORE(programCounter,    65535 & atoi(buff));
+
           }
+
         } else {
 printf( "closed\n" );
           close( client );
 
           client = 0;
-          max = server;
+          fd_max = server;
 
 	  STORE(currentAddressLED, 0);
 
@@ -1093,6 +1126,7 @@ printf( "closed\n" );
         }
       }
     }
+
 
     // Turn operation LEDs off for 10ms to create a fast blink
     STORE(executeLED, 0);
@@ -1104,6 +1138,8 @@ printf( "closed\n" );
     STORE(jmpLED, 0);
     STORE(iotLED, 0);
     STORE(oprLED, 0);
+
+    // FIXME:  should use select & handle sockets
     usleep(opled_delay);
   }
 
