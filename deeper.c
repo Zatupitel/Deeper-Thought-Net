@@ -437,8 +437,8 @@ nameToRegister( char *buff )
     return multiplierQuotient;
   else if( startsWith( buff, "stepCounter " ) )
     return stepCounter;
-  else if( startsWith( buff, "instField " ) )
-    return instField;
+  else if( startsWith( buff, "dataField " ) )
+    return dataField;
   else if( startsWith( buff, "instField " ) )
     return instField;
 
