@@ -425,21 +425,21 @@ startsWith( char *buff, char *cmd )
 int *
 nameToRegister( char *buff )
 {
-  if( startsWith( buff, "programCounter " ) )
+  if( startsWith( buff, "programCounter" ) )
     return programCounter;
-  else if( startsWith( buff, "memoryAddress " ) )
+  else if( startsWith( buff, "memoryAddress" ) )
     return memoryAddress;
-  else if( startsWith( buff, "memoryBuffer " ) )
+  else if( startsWith( buff, "memoryBuffer" ) )
     return memoryBuffer;
-  else if( startsWith( buff, "accumulator " ) )
+  else if( startsWith( buff, "accumulator" ) )
     return accumulator;
-  else if( startsWith( buff, "multiplierQuotient " ) )
+  else if( startsWith( buff, "multiplierQuotient" ) )
     return multiplierQuotient;
-  else if( startsWith( buff, "stepCounter " ) )
+  else if( startsWith( buff, "stepCounter" ) )
     return stepCounter;
-  else if( startsWith( buff, "dataField " ) )
+  else if( startsWith( buff, "dataField" ) )
     return dataField;
-  else if( startsWith( buff, "instField " ) )
+  else if( startsWith( buff, "instField" ) )
     return instField;
 
   return 0;
@@ -1164,11 +1164,12 @@ printf( "%i\n", v );
 
             if( reg ) {
               char *pos = strchr(buff+7, ' ');
-              int v = 0;
-              if( pos )
-                v = atoi(pos);
 
-	      STORE(reg, 65535 & v);
+              if( pos ) {
+                int v = atoi(pos);
+	        STORE(reg, 65535 & v);
+              } else
+                send( client, "missing value\n", 13, 0 );
 
             } else
               send( client, "unknown register\n", 17, 0 );
